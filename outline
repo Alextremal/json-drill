@@ -1,15 +1,23 @@
-features:
-    -- no AI;
-    -- no dependencies (except graphics library);
-    -- two modules, two languages (c and python?);
-    -- native app (using raylib).
+Features:
+    -- No AI;
+    -- No dependencies (except graphics library);
+    -- Two modules, two languages (c and python?);
+    -- Native app (using raylib).
 
-specs:
-    -- to calcualte working_s: start with a "working" entry, end with "stopped" one (basically, subtract their "t_s" values);
-    -- to calcualte stopped_s: start with a "stopped" entry, end with "working" one (basically, subtract their "t_s" values);
-    -- with this formula, the "02_*" file must be "6, 2, 0" but it's "5, 3, 0" in the example. I'm pretty sure it's a mistake.
+Specs:
+    -- To calcualte working_s: start with a "working" entry, end with "stopped" one (basically, subtract their "t_s" values);
+    -- To calcualte stopped_s: start with a "stopped" entry, end with "working" one (basically, subtract their "t_s" values);
+    -- With this formula, the "02_*" file must be "6, 2, 0" but it's "5, 3, 0" in the example. I'm pretty sure it's a mistake.
 
-plot:
-    -- we need a way to compress the output data so it fits some certain number of points on the plot. E.g. if the span is from 0 to 1000 seconds, we obviously can't show all the points. We want to show only, say, 10 samples. So for example, at second 1 we should somehow compress 100 values into one value;
-    -- it would be nice to allow zooming in to see values at a smaller range (basically, seeing more precise picture at some range) with the last range being from 0 to, say, 10;
-    -- also we should somehow show the gaps in the data.
+Plot:
+    -- We need a way to compress the output data so it fits some certain number of points on the plot. E.g. if the span is from 0 to 1000 seconds, we obviously can't show all the points. We want to show only, say, 10 samples. So for example, at second 1 we should somehow compress 100 values into one value;
+    -- It would be nice to allow zooming in to see values at a smaller range (basically, seeing more precise picture at some range) with the last range being from 0 to, say, 10;
+    -- Also we should somehow show the gaps in the data.
+
+To be mentioned:
+    -- The two-module system with loose coupling (which improves the team work).
+    First module:
+        -- Self-made json parsing library;
+        -- Added features to the library necessary for the project (decimal and negative values);
+        -- Algorithm used to analyze the input data--state machine;
+        -- The good design of the first module that respects the open-closed principle.

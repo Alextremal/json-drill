@@ -34,7 +34,7 @@ def produce_ast(json: str) -> Expr:
 
 def parse_expr() -> Expr:
     match at().ttype:
-        case TokenType.String | TokenType.Number | TokenType.Null | TokenType.Boolean:
+        case TokenType.String | TokenType.Integer | TokenType.Float | TokenType.Null | TokenType.Boolean:
             return parse_literal()
         case TokenType.Lbracket:
             eat()
@@ -86,8 +86,10 @@ def parse_literal() -> Literal:
     match token.ttype:
         case TokenType.String:
             return Literal(LiteralType.Str, token.value)
-        case TokenType.Number:
-            return Literal(LiteralType.Num, token.value)
+        case TokenType.Integer:
+            return Literal(LiteralType.Int, token.value)
+        case TokenType.Float:
+            return Literal(LiteralType.Float, token.value)
         case TokenType.Boolean:
             return Literal(LiteralType.Bool, token.value)
         case TokenType.Null:

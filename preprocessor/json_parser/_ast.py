@@ -3,16 +3,17 @@
 from enum import Enum
 
 class NodeType(Enum):
-    Object = 0
-    Literal = 1
-    List = 2
+    Object    = 0
+    Literal   = 1
+    List      = 2
     Attribute = 3
 
 class LiteralType(Enum):
-    Num = 0
-    Str = 1
-    Bool = 2
-    Null = 3
+    Int   = 0
+    Float = 1
+    Str   = 2
+    Bool  = 3
+    Null  = 4
 
 class Stmt:
     def __init__(self, kind: NodeType):

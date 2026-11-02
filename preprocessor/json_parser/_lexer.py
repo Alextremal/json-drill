@@ -6,17 +6,18 @@ from dataclasses import dataclass
 
 class TokenType(Enum):
     Whitespace = 0
-    Lbrace = 1
-    Rbrace = 2
-    Lbracket = 3
-    Rbracket = 4
-    Colon = 5
-    Comma = 6
-    Boolean = 7
-    String = 8
-    Number = 9
-    Null = 11
-    EOF = 10
+    Lbrace     = 1
+    Rbrace     = 2
+    Lbracket   = 3
+    Rbracket   = 4
+    Colon      = 5
+    Comma      = 6
+    Boolean    = 7
+    String     = 8
+    Integer    = 9
+    Float      = 10
+    Null       = 11
+    EOF        = 12
 
 @dataclass
 class TokenPos:
@@ -43,7 +44,8 @@ class Lexer:
         TokenType.Comma: ',',
         TokenType.Boolean: 'true|false',
         TokenType.String: '"[^"]*"',
-        TokenType.Number: '[0-9]+',
+        TokenType.Float: r'-?[0-9]+\.[0-9]+',
+        TokenType.Integer: '-?[0-9]+',
         TokenType.Null: 'null',
     }
 

@@ -6,12 +6,14 @@ from ._parser import produce_ast
 def _to_bool(value: str) -> bool:
     return True if value == 'true' else False
 
-def gen_literal(value: Literal) -> str | int | bool | None:
+def gen_literal(value: Literal) -> str | int | float | bool | None:
     match value.literal_type:
         case LiteralType.Str:
             return value.value.strip('"')
-        case LiteralType.Num:
+        case LiteralType.Int:
             return int(value.value)
+        case LiteralType.Float:
+            return float(value.value)
         case LiteralType.Bool:
             return _to_bool(value.value)
         case LiteralType.Null:
