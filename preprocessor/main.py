@@ -1,53 +1,102 @@
 # TODO:
 # Factor out constants;
-# Compute time in different modes (low, normal, high)--basically split WORKING state into 3 and that's it (I hope);
-# Compute span;
 # Process format errors;
 # Generate result.json (so it matches the "expected_results.json" file); 
 # Create tests;
-# Add type hints.
+# Add type hints;
+# "check_format" and "analyze_samples" become too slow with heavy files.
 
-from enum import StrEnum
+from enum import Enum, StrEnum
 from json_parser import parse_json
 
 
 SPEC_FOLDER = "../spec/"
 
-# TODO: Maybe use separate enums for "state" stats and "dervied" stats and then combine them (and keep the State as well)
-
-# TODO: I completely forgot to use this enum...
-class Stat(StrEnum):
-    SPAN    = "span_s"
-    WORKING = "working_s"
+class BaseStat(StrEnum):
     STOPPED = "stopped_s"
-    GAP     = "gap_s"
-    INVALID = "invalid_s"
-    UNKNOWN = "unknown_s"
     LOW     = "low"
     NORMAL  = "normal"
     HIGH    = "high"
-
-# TODO: This enum doens't need to be string-based anymore (?)
-class State(StrEnum):
-    VOID    = ""
-    STOPPED = "stopped_s"
-    LOW     = "low_s"
-    NORMAL  = "normal_s"
-    HIGH    = "high_s"
     INVALID = "invalid_s"
     GAP     = "gap_s"
+
+class DerivedStat(StrEnum):
+    SPAN    = "span_s"
+    WORKING = "working_s"
+    UNKNOWN = "unknown_s"
+
+class State(Enum):
+    VOID    = 0
+    STOPPED = 1
+    LOW     = 2
+    NORMAL  = 3
+    HIGH    = 4
+    INVALID = 5
+    GAP     = 6
 
 def main():
     files = ["01_small", "02_boundaries", "03_gap_20min", "04_invalid_values", "05_long_record", "06_empty", "07_single_point", "08_missing_rpm", "09_wrong_type", "10_duplicate_time"]
     for filei in range(len(files)):
         files[filei] = SPEC_FOLDER + files[filei] + ".json"
-    data_json = open(files[4]).read()
-    samples = parse_json(data_json).samples
 
+    filename = files[6]
+    json = open(filename).read()
+    samples = parse_json(json).samples
+
+    status = check_format(samples)
+    print(status)
+
+    #results_json = analyze_samples(filename, samples)
+    #print(results_json)
+
+# TODO: Form "message" as well
+def check_format(samples: list) -> dict:
+    result = dict()
+    # First element of the tuple says if the attribute allows None value
+    required_attrs = {
+        "t_s":          (False, int, float),
+        "pressure_mpa": (True, int, float),
+        "rpm":          (True, int, float),
+        "valid":        (False, bool,)
+    }
+    for samplei, sample in enumerate(samples):
+        if not all([hasattr(sample, attr) for attr in required_attrs.keys()]):
+            result["status"] = "format_error"
+            result["category"] = "missing_field"
+            # TODO: Point out the specific attribute (not bother for now)
+            result["message"] = f"В samples[{samplei}] отсутствует необходимое поле."
+            break
+        for field, types in required_attrs.items():
+            attr = getattr(sample, field)
+            if not any([isinstance(attr, types[1:])]) and not (types[0] == True and attr is None):
+                result["status"] = "format_error"
+                result["category"] = "wrong_type"
+                # TODO: Point out the specific attribute and type (not bother for now)
+                result["message"] = f"В samples[{samplei}] поле имеет недопустимый тип."
+                break
+        if samplei != len(samples) - 1:
+            nextt = samples[samplei + 1]
+            if nextt.t_s - sample.t_s <= 0:
+                result["status"] = "format_error"
+                result["category"] = "non_increasing_time"
+                result["message"] = f"samples[{samplei+1}].t_s не превышает предыдущую метку времени."
+                break
+    else:
+        result["status"] = "ok"
+    return result
+
+def analyze_samples(name: str, samples: list) -> str:
     state_stats = collect_state_stats(samples)
-    derived_stats = get_derived_stats(state_stats)
-    results = form_results(state_stats, derived_stats)
-    print(results)
+    base_stats = form_base_stats(state_stats)
+    derived_stats = form_derived_stats(state_stats)
+    results = form_results(base_stats, derived_stats)
+    results = {"sample_count": len(samples), **results}
+    # TODO: Better naming
+    foo = {
+        name: results
+    }
+    results_json = dict_to_json(foo)
+    return results_json
 
 def is_invalid(sample):
     return (sample.valid == False) or \
@@ -70,7 +119,7 @@ def get_state(sample_current, sample_next):
         return State.HIGH
 
 # TODO: Better naming
-# NOTE: This function collects intervals in each of the states
+# NOTE: This function finds intervals in each of the states
 def collect_state_stats(samples):
     start = None
     last_state = State.VOID
@@ -107,21 +156,25 @@ def collect_state_stats(samples):
         last_state = current_state
     return stats
 
-# TODO: Poor design
-def get_derived_stats(state_stats):
-    results = dict()
-    unknown_s = ("unknown_s", State.GAP, State.INVALID)
-    working_s = ("working_s", State.LOW, State.NORMAL, State.HIGH)
-    span_s    = ("span_s", State.STOPPED) # + unknown_s + working_s
-    derived_stats = (unknown_s, working_s, span_s)
-    for stat in derived_stats:
-        stat_name = stat[0]
-        results[stat_name] = 0
-        for state in range(1, len(stat)):
-            results[stat_name] += state_stats[stat[state]]
-    results[span_s[0]] += results[unknown_s[0]]
-    results[span_s[0]] += results[working_s[0]]
-    return results
+def form_base_stats(state_stats):
+    result = dict()
+    for stati, stat in enumerate(BaseStat):
+        result[stat] = list(state_stats.values())[stati]
+    return result
+
+def form_derived_stats(base_stats):
+    result = dict()
+    stats = {
+        DerivedStat.UNKNOWN: (State.GAP, State.INVALID),
+        DerivedStat.WORKING: (State.LOW, State.NORMAL, State.HIGH),
+        DerivedStat.SPAN:    (State.STOPPED,) # + UNKNOWN + WORKING
+    }
+    for stat, components in stats.items():
+        result[stat] = 0
+        for component in components:
+            result[stat] += base_stats[component]
+    result[DerivedStat.SPAN] += result[DerivedStat.UNKNOWN] + result[DerivedStat.WORKING]
+    return result
 
 #{
 #    "status": "ok",
@@ -136,17 +189,56 @@ def get_derived_stats(state_stats):
 #        "low": 3,
 #        "normal": 3,
 #        "high": 3
+#    }
 #}
 
-# TODO: Better naming;
-#       It's really bad that the "collect_state_stats" func returns dict whose values are enum fields while the "get_derived_stats" func uses strings instead.
-#       Result must be as shown above.
-def form_results(state_stats, derived_stats):
+# TODO:
+# Add "status" and "sample_count" fields;
+# Convert to json.
+def form_results(base_stats, derived_stats):
     result = dict()
-    for stat, value in state_stats.items():
-        result[str(stat)] = value
+
     for stat, value in derived_stats.items():
-        result[stat] = value
+        result[str(stat)] = value
+
+    for stat, value in base_stats.items():
+        if stat in (BaseStat.LOW, BaseStat.NORMAL, BaseStat.HIGH):
+            continue
+        result[str(stat)] = value
+
+    result["modes_s"] = {
+        "low":    base_stats[BaseStat.LOW],
+        "normal": base_stats[BaseStat.NORMAL],
+        "high":   base_stats[BaseStat.HIGH]
+    }
+
+    return result
+
+# Dict keys must be strings
+def dict_to_json(d):
+    buffer = list()
+    result = _dict_to_json_impl(d, buffer)
+    return result
+
+def _dict_to_json_impl(d, buffer, depth=1):
+    buffer.append('{\n')
+    items = d.items()
+    for i, (k, v) in enumerate(items):
+        for _ in range(depth):
+            buffer.append(' ' * 4)
+        buffer.append(f'"{k}": ')
+        if isinstance(v, dict):
+            _dict_to_json_impl(v, buffer, depth+1)
+        else:
+            buffer.append(f'{v}')
+            # Avoid trailing comma
+            if i != len(items) - 1:
+                buffer.append(',')
+            buffer.append('\n')
+    for _ in range(depth-1):
+        buffer.append(' ' * 4)
+    buffer.append('}\n')
+    result = ''.join(buffer)
     return result
 
 def print_stats(stats):
