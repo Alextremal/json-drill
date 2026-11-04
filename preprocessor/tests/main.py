@@ -1,6 +1,3 @@
-# TODO:
-# Think over what to do with the "05_long_record.json"
-
 import sys
 from pathlib import Path
 parent_dir = str(Path(__file__).resolve().parent.parent)
