@@ -1,16 +1,14 @@
 # TODO:
 # Factor out constants;
-# Process format errors;
-# Generate result.json (so it matches the "expected_results.json" file); 
 # Create tests;
-# Add type hints;
-# "check_format" and "analyze_samples" become too slow with heavy files.
+# Add type hints.
 
 from enum import Enum, StrEnum
 from json_parser import parse_json
 
 
 SPEC_FOLDER = "../spec/"
+
 
 class BaseStat(StrEnum):
     STOPPED = "stopped_s"
@@ -20,10 +18,12 @@ class BaseStat(StrEnum):
     INVALID = "invalid_s"
     GAP     = "gap_s"
 
+
 class DerivedStat(StrEnum):
     SPAN    = "span_s"
     WORKING = "working_s"
     UNKNOWN = "unknown_s"
+
 
 class State(Enum):
     VOID    = 0
@@ -34,22 +34,38 @@ class State(Enum):
     INVALID = 5
     GAP     = 6
 
+
 def main():
     files = ["01_small", "02_boundaries", "03_gap_20min", "04_invalid_values", "05_long_record", "06_empty", "07_single_point", "08_missing_rpm", "09_wrong_type", "10_duplicate_time"]
     for filei in range(len(files)):
         files[filei] = SPEC_FOLDER + files[filei] + ".json"
 
-    filename = files[6]
+    for filename in files:
+        result = form_results(filename)
+        print(result)
+
+
+# TODO: Naming sucks?
+def form_results(filename: str) -> str:
+    result = dict()
+
     json = open(filename).read()
-    samples = parse_json(json).samples
+    dataset = parse_json(json)
 
-    status = check_format(samples)
-    print(status)
+    dataset_name = dataset.dataset_id + ".json"
+    result[dataset_name] = dict()
+    samples = dataset.samples
+    check = check_format(samples)
+    if check["status"] != "ok":
+        result[dataset_name] = { **check }
+        return dict_to_json(result)
+    result[dataset_name]["status"] = "ok"
+    result[dataset_name]["sample_count"] = len(samples)
+    stats = analyze_samples(samples)
+    result[dataset_name] = { **result[dataset_name], **stats }
+    return dict_to_json(result)
 
-    #results_json = analyze_samples(filename, samples)
-    #print(results_json)
 
-# TODO: Form "message" as well
 def check_format(samples: list) -> dict:
     result = dict()
     # First element of the tuple says if the attribute allows None value
@@ -65,7 +81,7 @@ def check_format(samples: list) -> dict:
             result["category"] = "missing_field"
             # TODO: Point out the specific attribute (not bother for now)
             result["message"] = f"В samples[{samplei}] отсутствует необходимое поле."
-            break
+            return result
         for field, types in required_attrs.items():
             attr = getattr(sample, field)
             if not any([isinstance(attr, types[1:])]) and not (types[0] == True and attr is None):
@@ -73,35 +89,52 @@ def check_format(samples: list) -> dict:
                 result["category"] = "wrong_type"
                 # TODO: Point out the specific attribute and type (not bother for now)
                 result["message"] = f"В samples[{samplei}] поле имеет недопустимый тип."
-                break
+                return result
         if samplei != len(samples) - 1:
             nextt = samples[samplei + 1]
             if nextt.t_s - sample.t_s <= 0:
                 result["status"] = "format_error"
                 result["category"] = "non_increasing_time"
                 result["message"] = f"samples[{samplei+1}].t_s не превышает предыдущую метку времени."
-                break
-    else:
-        result["status"] = "ok"
+                return result
+    result["status"] = "ok"
     return result
 
-def analyze_samples(name: str, samples: list) -> str:
+
+# TODO: Naming sucks?
+def analyze_samples(samples: list) -> dict:
     state_stats = collect_state_stats(samples)
     base_stats = form_base_stats(state_stats)
     derived_stats = form_derived_stats(state_stats)
-    results = form_results(base_stats, derived_stats)
-    results = {"sample_count": len(samples), **results}
-    # TODO: Better naming
-    foo = {
-        name: results
+    results = form_stat_results(base_stats, derived_stats)
+    return results
+
+
+def form_stat_results(base_stats: dict, derived_stats: dict) -> dict:
+    result = dict()
+
+    for stat, value in derived_stats.items():
+        result[str(stat)] = value
+
+    for stat, value in base_stats.items():
+        if stat in (BaseStat.LOW, BaseStat.NORMAL, BaseStat.HIGH):
+            continue
+        result[str(stat)] = value
+
+    result["modes_s"] = {
+        "low":    base_stats[BaseStat.LOW],
+        "normal": base_stats[BaseStat.NORMAL],
+        "high":   base_stats[BaseStat.HIGH]
     }
-    results_json = dict_to_json(foo)
-    return results_json
+
+    return result
+
 
 def is_invalid(sample):
     return (sample.valid == False) or \
            (sample.rpm is None or sample.rpm < 0) or \
            (sample.pressure_mpa is None or sample.pressure_mpa < 0)
+
 
 # TODO: Better naming
 def get_state(sample_current, sample_next):
@@ -118,7 +151,7 @@ def get_state(sample_current, sample_next):
     else:
         return State.HIGH
 
-# TODO: Better naming
+
 # NOTE: This function finds intervals in each of the states
 def collect_state_stats(samples):
     start = None
@@ -156,11 +189,13 @@ def collect_state_stats(samples):
         last_state = current_state
     return stats
 
+
 def form_base_stats(state_stats):
     result = dict()
     for stati, stat in enumerate(BaseStat):
         result[stat] = list(state_stats.values())[stati]
     return result
+
 
 def form_derived_stats(base_stats):
     result = dict()
@@ -176,49 +211,13 @@ def form_derived_stats(base_stats):
     result[DerivedStat.SPAN] += result[DerivedStat.UNKNOWN] + result[DerivedStat.WORKING]
     return result
 
-#{
-#    "status": "ok",
-#    "sample_count": 13,
-#    "span_s": 12,
-#    "working_s": 9,
-#    "stopped_s": 3,
-#    "gap_s": 0,
-#    "invalid_s": 0,
-#    "unknown_s": 0,
-#    "modes_s": {
-#        "low": 3,
-#        "normal": 3,
-#        "high": 3
-#    }
-#}
-
-# TODO:
-# Add "status" and "sample_count" fields;
-# Convert to json.
-def form_results(base_stats, derived_stats):
-    result = dict()
-
-    for stat, value in derived_stats.items():
-        result[str(stat)] = value
-
-    for stat, value in base_stats.items():
-        if stat in (BaseStat.LOW, BaseStat.NORMAL, BaseStat.HIGH):
-            continue
-        result[str(stat)] = value
-
-    result["modes_s"] = {
-        "low":    base_stats[BaseStat.LOW],
-        "normal": base_stats[BaseStat.NORMAL],
-        "high":   base_stats[BaseStat.HIGH]
-    }
-
-    return result
 
 # Dict keys must be strings
 def dict_to_json(d):
     buffer = list()
     result = _dict_to_json_impl(d, buffer)
     return result
+
 
 def _dict_to_json_impl(d, buffer, depth=1):
     buffer.append('{\n')
@@ -230,7 +229,10 @@ def _dict_to_json_impl(d, buffer, depth=1):
         if isinstance(v, dict):
             _dict_to_json_impl(v, buffer, depth+1)
         else:
-            buffer.append(f'{v}')
+            if isinstance(v, str):
+                buffer.append(f'"{v}"')
+            else:
+                buffer.append(f'{v}')
             # Avoid trailing comma
             if i != len(items) - 1:
                 buffer.append(',')
@@ -241,9 +243,6 @@ def _dict_to_json_impl(d, buffer, depth=1):
     result = ''.join(buffer)
     return result
 
-def print_stats(stats):
-    for state in stats:
-        print(f"{state}: {stats[state]}")
 
 if __name__ == "__main__":
     main()

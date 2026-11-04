@@ -1,0 +1,122 @@
+{
+    "01_small.json": {
+        "status": "ok",
+        "sample_count": 13,
+        "unknown_s": 0,
+        "working_s": 9,
+        "span_s": 12,
+        "stopped_s": 3,
+        "invalid_s": 0,
+        "gap_s": 0,
+        "modes_s": {
+            "low": 3,
+            "normal": 3,
+            "high": 3
+        }
+    },
+    "02_boundaries.json": {
+        "status": "ok",
+        "sample_count": 9,
+        "unknown_s": 0,
+        "working_s": 5,
+        "span_s": 8,
+        "stopped_s": 3,
+        "invalid_s": 0,
+        "gap_s": 0,
+        "modes_s": {
+            "low": 2,
+            "normal": 2,
+            "high": 1
+        }
+    },
+    "03_gap_20min.json": {
+        "status": "ok",
+        "sample_count": 602,
+        "unknown_s": 1200,
+        "working_s": 600,
+        "span_s": 1800,
+        "stopped_s": 0,
+        "invalid_s": 0,
+        "gap_s": 1200,
+        "modes_s": {
+            "low": 0,
+            "normal": 600,
+            "high": 0
+        }
+    },
+    "04_invalid_values.json": {
+        "status": "ok",
+        "sample_count": 9,
+        "unknown_s": 5,
+        "working_s": 2,
+        "span_s": 8,
+        "stopped_s": 1,
+        "invalid_s": 5,
+        "gap_s": 0,
+        "modes_s": {
+            "low": 0,
+            "normal": 2,
+            "high": 0
+        }
+    },
+    "05_long_record.json": {
+        "status": "ok",
+        "sample_count": 1742,
+        "unknown_s": 70,
+        "working_s": 1130,
+        "span_s": 1800,
+        "stopped_s": 600,
+        "invalid_s": 10,
+        "gap_s": 60,
+        "modes_s": {
+            "low": 300,
+            "normal": 530,
+            "high": 300
+        }
+    },
+    "06_empty.json": {
+        "status": "ok",
+        "sample_count": 0,
+        "unknown_s": 0,
+        "working_s": 0,
+        "span_s": 0,
+        "stopped_s": 0,
+        "invalid_s": 0,
+        "gap_s": 0,
+        "modes_s": {
+            "low": 0,
+            "normal": 0,
+            "high": 0
+        }
+    },
+    "07_single_point.json": {
+        "status": "ok",
+        "sample_count": 1,
+        "unknown_s": 0,
+        "working_s": 0,
+        "span_s": 0,
+        "stopped_s": 0,
+        "invalid_s": 0,
+        "gap_s": 0,
+        "modes_s": {
+            "low": 0,
+            "normal": 0,
+            "high": 0
+        }
+    },
+    "08_missing_rpm.json": {
+        "status": "format_error",
+        "category": "missing_field",
+        "message": "В samples[0] отсутствует необходимое поле."
+    },
+    "09_wrong_type.json": {
+        "status": "format_error",
+        "category": "wrong_type",
+        "message": "В samples[0] поле имеет недопустимый тип."
+    },
+    "10_duplicate_time.json": {
+        "status": "format_error",
+        "category": "non_increasing_time",
+        "message": "samples[1].t_s не превышает предыдущую метку времени."
+    }
+}
