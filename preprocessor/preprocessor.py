@@ -3,11 +3,10 @@
 # Create tests;
 # Add type hints.
 
+import sys
 from enum import Enum, StrEnum
+
 from json_parser import parse_json
-
-
-SPEC_FOLDER = "../spec/"
 
 
 class BaseStat(StrEnum):
@@ -36,20 +35,65 @@ class State(Enum):
 
 
 def main():
-    files = ["01_small", "02_boundaries", "03_gap_20min", "04_invalid_values", "05_long_record", "06_empty", "07_single_point", "08_missing_rpm", "09_wrong_type", "10_duplicate_time"]
-    for filei in range(len(files)):
-        files[filei] = SPEC_FOLDER + files[filei] + ".json"
+    # TODO: Poor design of cmd line arguments handling (use argparse module)
+    program_name = sys.argv[0]
+    argc = len(sys.argv)
+    if (argc < 3) or (not sys.argv[2] in ("json", "raw")) or (sys.argv[2] == "raw" and argc < 4):
+        print(f"USAGE: python ./{program_name} dataset (json | (raw outfile))") 
+        exit()
 
-    for filename in files:
-        result = form_results(filename)
-        print(result)
+    # files = ["01_small", "02_boundaries", "03_gap_20min", "04_invalid_values", "05_long_record", "06_empty", "07_single_point", "08_missing_rpm", "09_wrong_type", "10_duplicate_time"]
+    #for filei in range(len(files)):
+    #    files[filei] = DATASET_FOLDER + files[filei] + ".json"
+    #filename = files[0]
+
+    dataset = sys.argv[1]
+    choice = sys.argv[2]
+    if choice == "json":
+        results = form_total_results(filename)
+        print(results)
+    elif choice == "raw":
+        outfile = sys.argv[3]
+        prepare_for_plotter(dataset, outfile)
+    else:
+        assert False, "Unreachable"
 
 
-# TODO: Naming sucks?
-def form_results(filename: str) -> str:
+# TODO: Better naming;
+#       Handle invalid value separately (because they are considered "ok").
+#       1) Compute bounds;
+#       2) Write table of values (only for rpm for now);
+#       3) Write number of samples;
+#       4) Call analyze_samples for total resutls and write them separately.
+#       *Think over the algorythm of compressing the values into certain range (say, 10);
+#       *Think over visualizing total results (maybe bars?);
+#       *Think over visualizing gaps.
+def prepare_for_plotter(filename: str, outfile: str) -> None:
+    with open(filename) as f:
+        json = f.read()
+    dataset = parse_json(json)
+    samples = dataset.samples
+    check = check_format(samples)
+    if check["status"] != "ok":
+        # TODO: Write the error message to the file
+        return
+    time_rpm_table = [(sample.t_s, sample.rpm) for sample in samples]
+    time_span = samples[-1].t_s - samples[0].t_s
+    rpm_lower = min(rpm for _, rpm in time_rpm_table)
+    rpm_upper = max(rpm for _, rpm in time_rpm_table)
+    with open(outfile, "w") as f:
+        f.write(f"{time_span}\n") # Time span
+        f.write(f"{rpm_lower} {rpm_upper}\n") # Bounds
+        for time, rpm in time_rpm_table: # Table of values
+            f.write(f"{time} {rpm}\n")
+
+
+# TODO: Better naming
+def form_total_results(filename: str) -> str:
     result = dict()
 
-    json = open(filename).read()
+    with open(filename) as f:
+        json = f.read()
     dataset = parse_json(json)
 
     dataset_name = dataset.dataset_id + ".json"
@@ -101,7 +145,7 @@ def check_format(samples: list) -> dict:
     return result
 
 
-# TODO: Naming sucks?
+# TODO: Better naming
 def analyze_samples(samples: list) -> dict:
     state_stats = collect_state_stats(samples)
     base_stats = form_base_stats(state_stats)

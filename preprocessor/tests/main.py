@@ -9,6 +9,7 @@ from preprocessor import form_results
 DATASET_FOLDER = "./dataset/"
 
 
+# TODO: Compare each result with the corresponding entry in "expected_results.json"
 def main():
     files = ["01_small", "02_boundaries", "03_gap_20min", "04_invalid_values", "05_long_record", "06_empty", "07_single_point", "08_missing_rpm", "09_wrong_type", "10_duplicate_time"]
     for filei in range(len(files)):
