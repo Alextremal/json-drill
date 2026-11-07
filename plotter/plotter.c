@@ -1,11 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <time.h>
 #include <raylib.h>
 
 #define WIDTH 1120
 #define HEIGHT 840
 #define PLOT_MARGIN 50
+#define POINT_SIZE 5
 
 #define MAX_SAMPLES 200
 #define MEASURE_COUNT 10
@@ -15,32 +17,39 @@
 #define OUTPUT_FILE        "./total_results.txt"
 
 typedef struct {
-    int x, y;
+    float t, rpm;
 } Sample;
 
-// TODO: Allocate memory for samples dynamically
-Sample samples[MEASURE_COUNT] = {0};
-int lower_y, upper_y;
-int time_span;
+typedef struct {
+    float t, rpm;
+    float x, y;
+    bool isGap;
+} Point;
 
-// Convert from [lower_y..upper_y] to [PLOT_MARGIN..HEIGHT-PLOT_MARGIN]
-int Screen(int y)
+// TODO: Allocate memory for samples dynamically
+Sample samples[MAX_SAMPLES] = {0};
+Point points[MAX_SAMPLES] = {0};
+// TODO: Maybe organize these metadata into a struct?
+int lowerY, upperY;
+int timeSpan;
+int sampleCount;
+int pointCount;
+
+// Convert from [lowerY..upperY] to [PLOT_MARGIN..HEIGHT-PLOT_MARGIN]
+float ScreenY(float y)
 {
-    // [lower_y..upper_y]   - lower_y
-    // [0..upper_y-lower_y] / upper_y-lower_y
+    // [lowerY..upperY]   - lowerY
+    // [0..upperY-lowerY] / upperY-lowerY
     // [0..1] * HEIGHT
-    //return (1 - ((float) y / 9)) * (HEIGHT - 2*PLOT_MARGIN) + PLOT_MARGIN;
-    return (1 - ((float) (y - lower_y) / (upper_y-lower_y))) * (HEIGHT - 2*PLOT_MARGIN) + PLOT_MARGIN;
+    return (1 - ((y - lowerY) / (upperY-lowerY))) * (HEIGHT - 2*PLOT_MARGIN) + PLOT_MARGIN;
 }
 
-void GenerateSamples(void)
+// Convert from [0..timeSpan] to [PLOT_MARGIN..WIDTH-PLOT_MARGIN]
+float ScreenX(float x)
 {
-    for (int i = 0; i < MEASURE_COUNT; i++) {
-        samples[i] = (Sample) {
-            .x = i,
-            .y = rand()%10
-        };
-    }
+    // [0..timeSpan] / timeSpan
+    // [0..1] * WIDTH
+    return (x / timeSpan) * (WIDTH - 2*PLOT_MARGIN) + PLOT_MARGIN;
 }
 
 void RenderAxis(void)
@@ -51,29 +60,33 @@ void RenderAxis(void)
     DrawLine(PLOT_MARGIN, HEIGHT-PLOT_MARGIN, WIDTH-PLOT_MARGIN, HEIGHT-PLOT_MARGIN, WHITE);    
 }
 
+void SetPointsScreenCoords(void)
+{
+    for (int i = 0; i < pointCount; i++) {
+        Point *point = &points[i];
+        point->x = ScreenX(point->t);
+        point->y = ScreenY(point->rpm);
+    }
+}
+
 void RenderPlot(void)
 {
-    Sample firstSample = samples[0];
-    Vector2 firstPoint = {
-        .x = PIXELS_PER_MEASURE * firstSample.x + PLOT_MARGIN, // TODO: respect right margin too 
-        .y = Screen(firstSample.y)
-    };
-    DrawCircleV(firstPoint, 5, RED);
-    for (int i = 1; i < MEASURE_COUNT; i++) {
-        Sample secondSample = samples[i];
-        Vector2 secondPoint = {
-            .x = PIXELS_PER_MEASURE * secondSample.x + PLOT_MARGIN, // TODO: respect right margin too 
-            .y = Screen(secondSample.y)
-        };
-        DrawCircleV(secondPoint, 5, RED);
-        DrawLineV(firstPoint, secondPoint, RED);
+    SetPointsScreenCoords();
+    Point firstPoint;
+    for (int i = 0; i < pointCount; i++) {
+        if (i == 0) {
+            firstPoint = points[0];
+            DrawCircle(firstPoint.x, firstPoint.y, POINT_SIZE, RED);
+            continue;
+        }
+        Point secondPoint = points[i];
+        Color lineColor = firstPoint.isGap ? GRAY : RED;
+        DrawLine(firstPoint.x, firstPoint.y, secondPoint.x, secondPoint.y, lineColor);
+        DrawCircle(secondPoint.x, secondPoint.y, POINT_SIZE, RED);
         firstPoint = secondPoint;
     }
 }
 
-// TODO:
-// We assume we have MEASURE_COUNT number of values in the file;
-// Handle errors properly.
 int LoadSamples(const char *input_file)
 {
     Sample sample_buf = {0};
@@ -85,50 +98,113 @@ int LoadSamples(const char *input_file)
         exit(1);
     }
     
-    if (fscanf(f, "%d", &time_span) != 1)
+    if (fscanf(f, "%d", &sampleCount) != 1)
         return -1;
-    if (fscanf(f, "%d%d", &lower_y, &upper_y) != 2)
+    if (fscanf(f, "%d", &timeSpan) != 1)
         return -1;
-    // Advance to the next line
-    while ((c = fgetc(f)) != '\n' && c != EOF)
-        continue;
+    if (fscanf(f, "%d%d", &lowerY, &upperY) != 2)
+        return -1;
 
-    while (fscanf(f, "%d%d", &sample_buf.x, &sample_buf.y) == 2) {
-        if (samplei >= MEASURE_COUNT)
-            break;
+    while (fscanf(f, "%f%f", &(sample_buf.t), &(sample_buf.rpm)) == 2)
         samples[samplei++] = sample_buf;
-        // Advance to the next line
-        while ((c = fgetc(f)) != '\n' && c != EOF)
-            continue;
-    }
     return 0;
 }
 
-void PrepareData(const char *input_file)
+void CallPythonModule(const char *input_file)
 {
     char python_call_cmd[128];
     snprintf(python_call_cmd, 128,
              "python %s %s raw %s", PYTHON_MODULE_PATH, input_file, OUTPUT_FILE);
-    printf("%s\n", python_call_cmd);
     system(python_call_cmd); // TODO: Check for errors
-    if (LoadSamples(OUTPUT_FILE) != 0) {
-        fprintf(stderr, "ERROR: could not load samples at %s", OUTPUT_FILE);
-        exit(1);
+}
+
+void CompressSamples(void)
+{
+    float batchSize = (float) timeSpan / MEASURE_COUNT;
+    float accumulatedInterval = 0.0f;
+    float accumulatedRpm = 0.0f;
+
+    for (int samplei = 0; samplei < sampleCount; samplei++) {
+        Sample current = samples[samplei];
+        if (samplei == 0) {
+            points[pointCount++] = (Point) {
+                .t = samples[0].t,
+                .rpm = samples[0].rpm,
+                .isGap = false
+            };
+            continue;
+        } else if (samplei == sampleCount - 1) {
+            points[pointCount++] = (Point) {
+                .t = samples[samplei].t,
+                .rpm = accumulatedRpm / accumulatedInterval,
+                .isGap = false
+            };
+            break;
+        }
+        Sample next = samples[samplei + 1];
+        float interval = next.t - current.t;
+        if (interval > 1.5f) {
+            points[pointCount++] = (Point) {
+                .t = current.t,
+                .rpm = accumulatedRpm / accumulatedInterval,
+                .isGap = true
+            };
+            points[pointCount++] = (Point) {
+                .t = next.t,
+                .rpm = next.rpm,
+                .isGap = false
+            };
+            accumulatedInterval = next.rpm - batchSize*((int) (next.rpm / batchSize));
+            accumulatedRpm = 0.0f;
+            continue;
+        }
+        if (batchSize - accumulatedInterval <= 0) {
+            points[pointCount++] = (Point) {
+                .t = current.t,
+                .rpm = accumulatedRpm / accumulatedInterval,
+                .isGap = false
+            };
+            accumulatedInterval = accumulatedRpm = 0.0f;
+        }
+        accumulatedInterval += interval;
+        accumulatedRpm += current.rpm;
     }
 }
 
-// Compress samples so their amount doesn't exceed MEASURE_COUNT
-void CompressSamples(void)
+void ShowPointDetails(Point *point)
 {
-    int batch_size = time_span / MEASURE_COUNT; // TODO: Handle the possible remainder
+    char pointInfoBuf[128];
+    snprintf(pointInfoBuf, 128, "t: %.2f\nrpm: %.2f", point->t, point->rpm);
+    int textPosX = point->x - 20;
+    int textPosY = point->y / HEIGHT > 0.6f ? point->y - 60 : point->y + 60;
+    DrawText(pointInfoBuf, textPosX, textPosY, 18, WHITE);
+}
 
+void ProcessPoints(void)
+{
+    for (int pointi = 0; pointi < pointCount; pointi++) {
+        Point point = points[pointi];
+        Vector2 center = { .x = point.x, .y = point.y };
+        bool collision = CheckCollisionPointCircle(GetMousePosition(), center, POINT_SIZE);
+        if (!collision) continue;
+        ShowPointDetails(&point);
+    }
 }
 
 int main(int argc, char *argv[])
 {
-    LoadSamples("total_results.txt");
+    //if (LoadSamples("total_results.tmp") != 0) {
+    //    fprintf(stderr, "ERROR: could not load samples at %s", OUTPUT_FILE);
+    //    exit(1);
+    //}
+    //CompressSamples();
+    //SetPointsScreenCoords();
 
-    return 0;
+    //for (int i = 0; i < pointCount; i++) {
+    //    printf("%f, %f\n", points[i].t, points[i].rpm);
+    //} 
+
+    //return 0;
 
     if (argc < 2) {
         fprintf(stderr, "USAGE: %s dataset\n", argv[0]);
@@ -136,7 +212,12 @@ int main(int argc, char *argv[])
     }
     const char *dataset = argv[1];
 
-    PrepareData(dataset);
+    CallPythonModule(dataset);
+    if (LoadSamples(OUTPUT_FILE) != 0) {
+        fprintf(stderr, "ERROR: could not load samples at %s", OUTPUT_FILE);
+        exit(1);
+    }
+    CompressSamples();
 
     InitWindow(1120, 840, "Plotter");
     SetTargetFPS(20);
@@ -145,7 +226,8 @@ int main(int argc, char *argv[])
         BeginDrawing();
             RenderAxis();
             RenderPlot();
-            //ClearBackground(RED);
+            ProcessPoints();
+            ClearBackground(BLACK);
         EndDrawing();
     }
 

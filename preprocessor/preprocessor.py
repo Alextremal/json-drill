@@ -77,14 +77,16 @@ def prepare_for_plotter(filename: str, outfile: str) -> None:
     if check["status"] != "ok":
         # TODO: Write the error message to the file
         return
-    time_rpm_table = [(sample.t_s, sample.rpm) for sample in samples]
+    sample_count = len(samples)
     time_span = samples[-1].t_s - samples[0].t_s
+    time_rpm_table = [(sample.t_s, sample.rpm) for sample in samples]
     rpm_lower = min(rpm for _, rpm in time_rpm_table)
     rpm_upper = max(rpm for _, rpm in time_rpm_table)
     with open(outfile, "w") as f:
-        f.write(f"{time_span}\n") # Time span
+        f.write(f"{sample_count}\n")          # Sample count
+        f.write(f"{time_span}\n")             # Time span
         f.write(f"{rpm_lower} {rpm_upper}\n") # Bounds
-        for time, rpm in time_rpm_table: # Table of values
+        for time, rpm in time_rpm_table:      # Table of values
             f.write(f"{time} {rpm}\n")
 
 
