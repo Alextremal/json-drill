@@ -4,9 +4,9 @@ parent_dir = str(Path(__file__).resolve().parent.parent)
 sys.path.append(parent_dir)
 
 from json_parser import parse_json
-from preprocessor import form_results
+from preprocessor import form_total_results
 
-DATASET_FOLDER = "./dataset/"
+DATASET_FOLDER = "./datasets/"
 
 
 # TODO: Compare each result with the corresponding entry in "expected_results.json"
@@ -16,7 +16,7 @@ def main():
         files[filei] = DATASET_FOLDER + files[filei] + ".json"
 
     filename = files[0]
-    result = form_results(filename)
+    result = form_total_results(filename)
     print(result)
 
 

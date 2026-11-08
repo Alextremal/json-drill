@@ -1,6 +1,19 @@
-[samples_count]
+ok ?
+[unknown_s]
+[working_s]
+[span_s]
+[stopped_s]
+[invalid_s]
+[gap_s]
+[low]
+[normal]
+[high]
+[sample_count]
 [time_span]
-[lower_y upper_y]
-[x1] [y1]
-[x2] [y2]
+[lower_rpm upper_rpm]
+[lower_pressure upper_pressure]
+[t1] ([rpm1] [pressure1]) | n
+[t2] ([rpm2] [pressure2]) | n
 ...
+:
+[error_message]

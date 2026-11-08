@@ -35,7 +35,7 @@ class State(Enum):
 
 
 def main():
-    # TODO: Poor design of cmd line arguments handling (use argparse module)
+    # TODO: Poor cmd line arguments handling (use argparse module)
     program_name = sys.argv[0]
     argc = len(sys.argv)
     if (argc < 3) or (not sys.argv[2] in ("json", "raw")) or (sys.argv[2] == "raw" and argc < 4):
@@ -50,7 +50,7 @@ def main():
     dataset = sys.argv[1]
     choice = sys.argv[2]
     if choice == "json":
-        results = form_total_results(filename)
+        results = form_total_results(dataset)
         print(results)
     elif choice == "raw":
         outfile = sys.argv[3]
@@ -59,15 +59,7 @@ def main():
         assert False, "Unreachable"
 
 
-# TODO: Better naming;
-#       Handle invalid value separately (because they are considered "ok").
-#       1) Compute bounds;
-#       2) Write table of values (only for rpm for now);
-#       3) Write number of samples;
-#       4) Call analyze_samples for total resutls and write them separately.
-#       *Think over the algorythm of compressing the values into certain range (say, 10);
-#       *Think over visualizing total results (maybe bars?);
-#       *Think over visualizing gaps.
+# TODO: Better naming
 def prepare_for_plotter(filename: str, outfile: str) -> None:
     with open(filename) as f:
         json = f.read()
@@ -75,19 +67,51 @@ def prepare_for_plotter(filename: str, outfile: str) -> None:
     samples = dataset.samples
     check = check_format(samples)
     if check["status"] != "ok":
-        # TODO: Write the error message to the file
+        with open(outfile, "w") as f:
+            f.write(f"{check['status']}: ")
+            f.write(f"{check['category']}\n")
+            f.write(f"{check['message']}\n")
         return
     sample_count = len(samples)
-    time_span = samples[-1].t_s - samples[0].t_s
-    time_rpm_table = [(sample.t_s, sample.rpm) for sample in samples]
-    rpm_lower = min(rpm for _, rpm in time_rpm_table)
-    rpm_upper = max(rpm for _, rpm in time_rpm_table)
+    time_span = samples[-1].t_s - samples[0].t_s if sample_count > 0 else 0
+
+    time_rpm_pressure_table = list()
+    for sample in samples:
+        if is_invalid(sample):
+            time_rpm_pressure_table.append((sample.t_s, None, None))
+            continue
+        time_rpm_pressure_table.append((sample.t_s, sample.rpm, sample.pressure_mpa))
+
+    rpm_lower = rpm_upper = pressure_lower = pressure_upper = 0
+    if sample_count > 0:
+        rpm_lower = min(rpm for _, rpm, _ in time_rpm_pressure_table if rpm is not None)
+        rpm_upper = max(rpm for _, rpm, _ in time_rpm_pressure_table if rpm is not None)
+        pressure_lower = min(pressure for _, _, pressure in time_rpm_pressure_table if pressure is not None)
+        pressure_upper = max(pressure for _, _, pressure in time_rpm_pressure_table if pressure is not None)
+
+    total_results = analyze_samples(samples)
+
     with open(outfile, "w") as f:
-        f.write(f"{sample_count}\n")          # Sample count
-        f.write(f"{time_span}\n")             # Time span
-        f.write(f"{rpm_lower} {rpm_upper}\n") # Bounds
-        for time, rpm in time_rpm_table:      # Table of values
-            f.write(f"{time} {rpm}\n")
+        f.write("ok\n")
+        f.write(f"{total_results['unknown_s']}\n")
+        f.write(f"{total_results['working_s']}\n")
+        f.write(f"{total_results['span_s']}\n")
+        f.write(f"{total_results['stopped_s']}\n")
+        f.write(f"{total_results['invalid_s']}\n")
+        f.write(f"{total_results['gap_s']}\n")
+        f.write(f"{total_results['modes_s']['low']}\n")
+        f.write(f"{total_results['modes_s']['normal']}\n")
+        f.write(f"{total_results['modes_s']['high']}\n")
+
+        f.write(f"{sample_count}\n")
+        f.write(f"{time_span}\n")
+        f.write(f"{rpm_lower} {rpm_upper}\n")
+        f.write(f"{pressure_lower} {pressure_upper}\n")
+        for time, rpm, pressure in time_rpm_pressure_table: # Table of values
+            if rpm is not None:
+                f.write(f"{time} {rpm} {pressure}\n")
+            else:
+                f.write(f"{time} n\n")
 
 
 # TODO: Better naming
@@ -119,7 +143,7 @@ def check_format(samples: list) -> dict:
         "t_s":          (False, int, float),
         "pressure_mpa": (True, int, float),
         "rpm":          (True, int, float),
-        "valid":        (False, bool,)
+        "valid":        (False, bool)
     }
     for samplei, sample in enumerate(samples):
         if not all([hasattr(sample, attr) for attr in required_attrs.keys()]):
