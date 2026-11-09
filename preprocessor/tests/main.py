@@ -6,7 +6,7 @@ sys.path.append(parent_dir)
 from json_parser import parse_json
 from preprocessor import form_total_results
 
-DATASET_FOLDER = "./datasets/"
+DATASET_FOLDER = "../../spec/datasets/"
 
 
 # TODO: Compare each result with the corresponding entry in "expected_results.json"
