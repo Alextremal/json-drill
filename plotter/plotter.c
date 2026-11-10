@@ -20,7 +20,7 @@
 #define MEASURE_COUNT 10
 #define PIXELS_PER_MEASURE (WIDTH / MEASURE_COUNT)
 
-#define PYTHON_MODULE_PATH "../preprocessor/preprocessor.py"
+#define PYTHON_MODULE_PATH "./preprocessor/preprocessor.py"
 #define OUTPUT_FILE        "./total_results.txt"
 
 #define STAT_COUNT 9
